@@ -33,6 +33,12 @@ USAGE
 6. Click "Preview Changes" to see what will happen.
 7. If satisfied, click "Apply Changes" to perform the renaming (and merging if enabled).
 
+MERGING VIDEO AND AUDIO
+-----------------------
+If "Rejoin Split .mp4 Files" is enabled:
+- The program looks for files with the same base name, where one ends in " 2" (e.g., "Video.mp4" and "Video 2.mp4").
+- It attempts to merge them into a single .mp4 file using FFmpeg.
+- The original split files are deleted if the merge is successful.
 
 SAVING & LOADING CONFIGURATION
 ------------------------------
