@@ -1,7 +1,7 @@
-Media-Import-Folder-Organizer
+Media Import Folder Organizer
 ========================================
 
-A desktop application for organizing large volumes of media files such as videos, images, and audio.
+A desktop application for organizing large volumes of imported media files such as videos, images, and audio.
 The program is designed to make bulk management of media collections simple, fast, and reliable.
 
 FEATURES
