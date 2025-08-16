@@ -1,4 +1,4 @@
-Bulk-Media-Organizer-Suite
+Media-Import-Folder-Organizer
 ========================================
 
 A desktop application for organizing large volumes of media files such as videos, images, and audio.
