@@ -1,51 +1,60 @@
 Bulk Folder Renamer & Video/Audio Merger
 ========================================
 
-DESCRIPTION
------------
-This program batch-renames folders and their contents based on customizable rules.
-It can also merge matching video and audio .mp4 files together using FFmpeg.
+A desktop application for organizing large volumes of media files such as videos, images, and audio.
+The program is designed to make bulk management of media collections simple, fast, and reliable.
 
 FEATURES
---------
-- Rename multiple folders according to configurable rules:
-  * Remove first/last characters
-  * Remove everything before/after a certain character
-  * Remove digits or special characters
-  * Replace underscores with spaces
-  * Convert to title case
-- Rename files inside each folder to match the folder name.
-- Optionally rejoin split .mp4 files (video and audio parts) using FFmpeg.
-- Save and load configuration presets.
+----------
 
-REQUIREMENTS
-------------
-- Windows (64-bit)
-- FFmpeg installed (if using .py file - for audio/video merging)
+The application is organized into five main tabs, each focused on a different type of media management task:
 
-USAGE
------
-1. Run the program
-2. Click "Browse" to select the main folder containing subfolders you want to process.
-3. Select specific subfolders to limit changes, or click "Select All".
-4. Adjust renaming rules in the "Folder Renaming Options" section.
-5. Choose processing options
-6. Click "Preview Changes" to see what will happen.
-7. If satisfied, click "Apply Changes" to perform the renaming (and merging if enabled).
+1. Bulk Folder Renamer
 
-MERGING VIDEO AND AUDIO
------------------------
-If "Rejoin Split .mp4 Files" is enabled:
-- The program looks for files with the same base name, where one ends in " 2" (e.g., "Video.mp4" and "Video 2.mp4").
-- It attempts to merge them into a single .mp4 file using FFmpeg.
-- The original split files are deleted if the merge is successful.
+Rename multiple folders and files at once.
 
-SAVING & LOADING CONFIGURATION
-------------------------------
-- Click "Save Configuration" to store your current renaming settings as a .json file.
-- Click "Load Configuration" to reuse them later.
+Supports flexible rules for cleaning up and standardizing file names.
+
+2. Media Merger
+
+Combine split .mp4 video files into a single video.
+
+Great for repairing segmented downloads or restoring split media.
+
+3. File Sorter
+
+Bulk organize media files into folders automatically.
+
+Sorts based on file type (video, audio, image, etc.).
+
+4. Folder Cleanup
+
+Flatten nested folders into a single directory.
+
+Remove empty or broken files.
+
+Detect and remove .mp4 files with no thumbnail or video length.
+
+Clean out temporary and cache files.
+
+Remove unwanted files based on file type.
+
+5. Duplicate File Finder
+
+Locate and flag duplicate files for review.
+
+Detects duplicates using filename, size, or deeper file analysis.
+
+Helps save space by safely cleaning redundant media.
+
+PURPOSE
+----------
+
+This tool was built to help organize, clean, and manage messy media folders containing large amounts of files.
+It’s especially useful for anyone maintaining video archives, downloaded media collections, or large folders of mixed file types.
 
 DISCLAIMER
 ----------
 Always preview changes before applying them to avoid accidental data loss.
+Always back up files locally before making changes.
 The author is not responsible for any unintended file/folder modifications.
