@@ -2002,10 +2002,28 @@ class ImportFolderCleanup:
             try:
                 # Analyze flatten folders
                 if self.flatten_folders_var.get():
-                    flat_folders = self._find_flat_folders(folder)
-                    for flat_folder in flat_folders:
-                        files = [f for f in flat_folder.iterdir() if f.is_file()]
-                        preview_items["Flatten Files"].extend([(f, f"Move to {folder.name}") for f in files])
+                    if self._cleanup_selected_at_apply is not None:
+                        # Specific subfolders selected - analyze flattening the selected folders themselves
+                        all_items = list(folder.iterdir())
+                        files = [item for item in all_items if item.is_file()]
+                        subdirs = [item for item in all_items if item.is_dir()]
+                        
+                        # Show files that will be moved
+                        preview_items["Flatten Files"].extend([(f, f"Move to parent folder") for f in files])
+                        # Show subdirectories that will be moved
+                        preview_items["Flatten Files"].extend([(d, f"Move to parent folder") for d in subdirs])
+                        # Show that the selected folder will be removed if it becomes empty
+                        if all_items:  # Only if there are items to move
+                            preview_items["Remove Empty Folders"].append((folder, f"Remove after flattening"))
+                    else:
+                        # No specific selection - analyze flattening subfolders within the folder
+                        flat_folders = self._find_flat_folders(folder)
+                        for flat_folder in flat_folders:
+                            files = [f for f in flat_folder.iterdir() if f.is_file()]
+                            preview_items["Flatten Files"].extend([(f, f"Move to {folder.name}") for f in files])
+                            # Also show that the empty folder will be removed
+                            if files:  # Only if there are files to move
+                                preview_items["Remove Empty Folders"].append((flat_folder, f"Remove after flattening"))
 
                 # Analyze broken media files
                 if self.remove_broken_media_var.get():
@@ -2027,8 +2045,8 @@ class ImportFolderCleanup:
                     custom_files = self._find_custom_extension_files(folder)
                     preview_items["Remove Custom Extensions"].extend([(f, "Custom extension") for f in custom_files])
 
-                # Analyze empty folders (after flattening)
-                if self.remove_empty_folders_var.get() and self.flatten_folders_var.get():
+                # Analyze empty folders (separate from flattening)
+                if self.remove_empty_folders_var.get():
                     empty_folders = self._find_empty_folders(folder)
                     preview_items["Remove Empty Folders"].extend([(f, "Empty folder") for f in empty_folders])
 
@@ -2065,7 +2083,12 @@ class ImportFolderCleanup:
                 
                 # Step 1: Flatten folders
                 if self.flatten_folders_var.get():
-                    self._flatten_folders_in_path(folder)
+                    if self._cleanup_selected_at_apply is not None:
+                        # Specific subfolders selected - flatten the selected folders themselves
+                        self._flatten_selected_folder(folder, folder_path)
+                    else:
+                        # No specific selection - flatten subfolders within the folder
+                        self._flatten_folders_in_path(folder)
                 
                 # Step 2: Remove broken media files
                 if self.remove_broken_media_var.get():
@@ -2362,8 +2385,94 @@ class ImportFolderCleanup:
                 
                 self.cleanup_log_message(f"Moved {moved_count} files from '{flat_folder.name}'")
                 
+                # Remove the now-empty folder after moving all files
+                try:
+                    if moved_count > 0:  # Only remove if we successfully moved files
+                        # Double-check the folder is actually empty
+                        remaining_items = list(flat_folder.iterdir())
+                        if not remaining_items:
+                            flat_folder.rmdir()
+                            self.cleanup_log_message(f"Removed empty folder: {flat_folder.name}")
+                        else:
+                            self.cleanup_log_message(f"Folder '{flat_folder.name}' not removed - still contains {len(remaining_items)} items")
+                except Exception as e:
+                    self.cleanup_log_message(f"Error removing empty folder '{flat_folder.name}': {e}")
+                
         except Exception as e:
             self.cleanup_log_message(f"Error flattening folders in '{parent_folder}': {e}")
+
+    def _flatten_selected_folder(self, selected_folder, parent_folder):
+        """Flatten a specific selected folder by moving its contents to the parent folder"""
+        try:
+            self.cleanup_log_message(f"Flattening selected folder: {selected_folder.name}")
+            
+            # Get all items in the selected folder (files and subdirectories)
+            all_items = list(selected_folder.iterdir())
+            files = [item for item in all_items if item.is_file()]
+            subdirs = [item for item in all_items if item.is_dir()]
+            
+            moved_count = 0
+            
+            # Move all files to parent folder
+            for file_path in files:
+                try:
+                    # Determine destination path
+                    dest_path = parent_folder / file_path.name
+                    
+                    # Handle name conflicts
+                    if dest_path.exists():
+                        counter = 1
+                        name_part = file_path.stem
+                        ext_part = file_path.suffix
+                        while dest_path.exists():
+                            new_name = f"{name_part} ({counter}){ext_part}"
+                            dest_path = parent_folder / new_name
+                            counter += 1
+                    
+                    # Move the file
+                    file_path.rename(dest_path)
+                    moved_count += 1
+                    
+                except Exception as e:
+                    self.cleanup_log_message(f"Error moving file '{file_path.name}': {e}")
+            
+            # Move all subdirectories to parent folder
+            for subdir in subdirs:
+                try:
+                    # Determine destination path
+                    dest_path = parent_folder / subdir.name
+                    
+                    # Handle name conflicts
+                    if dest_path.exists():
+                        counter = 1
+                        base_name = subdir.name
+                        while dest_path.exists():
+                            new_name = f"{base_name} ({counter})"
+                            dest_path = parent_folder / new_name
+                            counter += 1
+                    
+                    # Move the subdirectory
+                    subdir.rename(dest_path)
+                    moved_count += 1
+                    
+                except Exception as e:
+                    self.cleanup_log_message(f"Error moving folder '{subdir.name}': {e}")
+            
+            self.cleanup_log_message(f"Moved {moved_count} items from '{selected_folder.name}'")
+            
+            # Remove the now-empty selected folder if all items were moved successfully
+            try:
+                remaining_items = list(selected_folder.iterdir())
+                if not remaining_items:
+                    selected_folder.rmdir()
+                    self.cleanup_log_message(f"Removed empty folder: {selected_folder.name}")
+                else:
+                    self.cleanup_log_message(f"Folder '{selected_folder.name}' not removed - still contains {len(remaining_items)} items")
+            except Exception as e:
+                self.cleanup_log_message(f"Error removing empty folder '{selected_folder.name}': {e}")
+                
+        except Exception as e:
+            self.cleanup_log_message(f"Error flattening selected folder '{selected_folder}': {e}")
 
     def _remove_broken_media_files(self, folder):
         """Remove broken or empty media files"""
