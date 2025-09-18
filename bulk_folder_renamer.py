@@ -67,8 +67,8 @@ class ImportFolderCleanup:
     def __init__(self, root):
         self.root = root
         self.root.title("Import Folder Cleanup")
-        self.root.geometry("800x600")
-        self.root.minsize(800, 600)
+        self.root.geometry("1000x750")
+        self.root.minsize(1000, 750)
         
         # Variables
         self.selected_folder = tk.StringVar()
@@ -94,6 +94,7 @@ class ImportFolderCleanup:
         
         self.setup_ui()
         self.load_config()
+        self._update_export_mode_state()
         
     def setup_ui(self):
         # Configure grid weights
@@ -128,7 +129,7 @@ class ImportFolderCleanup:
         list_container.grid(row=0, column=0, sticky=(tk.W, tk.E))
         list_container.columnconfigure(0, weight=1)
 
-        self.subfolder_listbox = tk.Listbox(list_container, selectmode=tk.EXTENDED, height=6, exportselection=False)
+        self.subfolder_listbox = tk.Listbox(list_container, selectmode=tk.EXTENDED, height=5, exportselection=False)
         self.subfolder_listbox.grid(row=0, column=0, sticky=(tk.W, tk.E))
         sub_scroll = ttk.Scrollbar(list_container, orient=tk.VERTICAL, command=self.subfolder_listbox.yview)
         sub_scroll.grid(row=0, column=1, sticky=(tk.N, tk.S))
@@ -198,7 +199,7 @@ class ImportFolderCleanup:
         log_frame.rowconfigure(0, weight=1)
         renamer_frame.rowconfigure(3, weight=1)
 
-        self.log_text = scrolledtext.ScrolledText(log_frame, height=10, wrap=tk.WORD, width=40)
+        self.log_text = scrolledtext.ScrolledText(log_frame, height=8, wrap=tk.WORD, width=40)
         self.log_text.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
 
         # ========================= Media Merger Tab =========================
@@ -305,17 +306,19 @@ class ImportFolderCleanup:
         # Output mode selection
         self.output_mode_var = tk.StringVar(value="in_place")
         ttk.Radiobutton(s_output_frame, text="Create folders in source directory", 
-                       variable=self.output_mode_var, value="in_place").grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=2)
+                       variable=self.output_mode_var, value="in_place", command=self._on_output_mode_change).grid(row=0, column=0, columnspan=2, sticky=tk.W, pady=2)
         ttk.Radiobutton(s_output_frame, text="Export to different directory:", 
-                       variable=self.output_mode_var, value="export").grid(row=1, column=0, sticky=tk.W, pady=2)
+                       variable=self.output_mode_var, value="export", command=self._on_output_mode_change).grid(row=1, column=0, sticky=tk.W, pady=2)
 
         # Export folder selection
         s_export_frame = ttk.Frame(s_output_frame)
         s_export_frame.grid(row=2, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=(5, 0))
         s_export_frame.columnconfigure(0, weight=1)
 
-        ttk.Entry(s_export_frame, textvariable=self.sorter_export_folder, state="readonly").grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
-        ttk.Button(s_export_frame, text="Browse", command=self.sorter_browse_export_folder).grid(row=0, column=1)
+        self.sorter_export_entry = ttk.Entry(s_export_frame, textvariable=self.sorter_export_folder, state="readonly")
+        self.sorter_export_entry.grid(row=0, column=0, sticky=(tk.W, tk.E), padx=(0, 5))
+        self.sorter_export_browse_button = ttk.Button(s_export_frame, text="Browse", command=self.sorter_browse_export_folder)
+        self.sorter_export_browse_button.grid(row=0, column=1)
 
         # Export operation mode (copy vs move)
         s_export_mode_frame = ttk.Frame(s_output_frame)
@@ -324,10 +327,12 @@ class ImportFolderCleanup:
         ttk.Label(s_export_mode_frame, text="Export mode:").pack(side=tk.LEFT)
         
         self.export_operation_var = tk.StringVar(value="copy")
-        ttk.Radiobutton(s_export_mode_frame, text="Copy files (keep originals)", 
-                       variable=self.export_operation_var, value="copy").pack(side=tk.LEFT, padx=(10, 0))
-        ttk.Radiobutton(s_export_mode_frame, text="Move files (remove originals)", 
-                       variable=self.export_operation_var, value="move").pack(side=tk.LEFT, padx=(10, 0))
+        self.copy_radio_button = ttk.Radiobutton(s_export_mode_frame, text="Copy files (keep originals)", 
+                       variable=self.export_operation_var, value="copy")
+        self.copy_radio_button.pack(side=tk.LEFT, padx=(10, 0))
+        self.move_radio_button = ttk.Radiobutton(s_export_mode_frame, text="Move files (remove originals)", 
+                       variable=self.export_operation_var, value="move")
+        self.move_radio_button.pack(side=tk.LEFT, padx=(10, 0))
 
         # Buttons frame
         s_buttons_frame = ttk.Frame(sorter_frame)
@@ -395,35 +400,72 @@ class ImportFolderCleanup:
         c_options_frame = ttk.LabelFrame(cleanup_frame, text="Cleanup Options", padding="10")
         c_options_frame.grid(row=3, column=0, sticky=(tk.W, tk.E), pady=(0, 10))
         c_options_frame.columnconfigure(0, weight=1)
+        c_options_frame.rowconfigure(0, weight=1)
+        
+        # Create a canvas and scrollbar for the options
+        c_canvas = tk.Canvas(c_options_frame, height=300)
+        c_scrollbar = ttk.Scrollbar(c_options_frame, orient="vertical", command=c_canvas.yview)
+        c_scrollable_frame = ttk.Frame(c_canvas)
+        
+        c_scrollable_frame.bind(
+            "<Configure>",
+            lambda e: c_canvas.configure(scrollregion=c_canvas.bbox("all"))
+        )
+        
+        c_canvas.create_window((0, 0), window=c_scrollable_frame, anchor="nw")
+        c_canvas.configure(yscrollcommand=c_scrollbar.set)
+        
+        c_canvas.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        c_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        
+        # Bind mouse wheel to canvas
+        def _on_mousewheel(event):
+            c_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
+        c_canvas.bind("<MouseWheel>", _on_mousewheel)
 
         # Flatten folders option
         self.flatten_folders_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(c_options_frame, text="Flatten folders (move files from flat subfolders up one level)", 
-                       variable=self.flatten_folders_var).grid(row=0, column=0, sticky=tk.W, pady=2)
+        self.flatten_folders_checkbox = ttk.Checkbutton(c_scrollable_frame, text="Flatten folders (move files from flat subfolders up one level)", 
+                       variable=self.flatten_folders_var, command=self._on_flatten_folders_toggle)
+        self.flatten_folders_checkbox.grid(row=0, column=0, sticky=tk.W, pady=2)
 
         self.remove_empty_folders_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(c_options_frame, text="Remove empty folders after flattening", 
-                       variable=self.remove_empty_folders_var).grid(row=1, column=0, sticky=tk.W, pady=2, padx=(20, 0))
+        self.remove_empty_folders_checkbox = ttk.Checkbutton(c_scrollable_frame, text="Remove empty folders after flattening", 
+                       variable=self.remove_empty_folders_var)
+        self.remove_empty_folders_checkbox.grid(row=1, column=0, sticky=tk.W, pady=2, padx=(20, 0))
+        
+        # Initially disable the remove empty folders checkbox
+        self._update_remove_empty_folders_state()
 
         # Remove broken media files
         self.remove_broken_media_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(c_options_frame, text="Remove broken/empty media files (0 bytes, 0 duration, unreadable)", 
+        ttk.Checkbutton(c_scrollable_frame, text="Remove broken/empty media files (0 bytes, 0 duration, unreadable)", 
                        variable=self.remove_broken_media_var).grid(row=2, column=0, sticky=tk.W, pady=2)
 
         # Remove .mp4 files without thumbnails (audio-only files)
         self.remove_no_thumbnail_videos_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(c_options_frame, text="Remove .mp4 files that can't generate thumbnails (audio-only files)", 
+        ttk.Checkbutton(c_scrollable_frame, text="Remove .mp4 files that can't generate thumbnails (audio-only files)", 
                        variable=self.remove_no_thumbnail_videos_var).grid(row=3, column=0, sticky=tk.W, pady=2)
+
+        # Remove empty or corrupted .mp4/.mp3 files
+        self.remove_empty_corrupted_mp4_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(c_scrollable_frame, text="Remove empty or corrupted .mp4/.mp3 files (0 bytes, corrupted)", 
+                       variable=self.remove_empty_corrupted_mp4_var).grid(row=4, column=0, sticky=tk.W, pady=2)
+
+        # Remove empty or corrupted image/gif files
+        self.remove_empty_corrupted_images_var = tk.BooleanVar(value=False)
+        ttk.Checkbutton(c_scrollable_frame, text="Remove empty or corrupted image/gif files (0 bytes, corrupted)", 
+                       variable=self.remove_empty_corrupted_images_var).grid(row=5, column=0, sticky=tk.W, pady=2)
 
         # Remove temporary files
         self.remove_temp_files_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(c_options_frame, text="Remove temporary/cache files (.tmp, .part, .download, .ds_store, thumbs.db, etc)", 
-                       variable=self.remove_temp_files_var).grid(row=4, column=0, sticky=tk.W, pady=2)
+        ttk.Checkbutton(c_scrollable_frame, text="Remove temporary/cache files (.tmp, .part, .download, .ds_store, thumbs.db, etc)", 
+                       variable=self.remove_temp_files_var).grid(row=6, column=0, sticky=tk.W, pady=2)
 
         # Custom extension removal
         self.remove_custom_extensions_var = tk.BooleanVar(value=False)
-        custom_ext_frame = ttk.Frame(c_options_frame)
-        custom_ext_frame.grid(row=5, column=0, sticky=(tk.W, tk.E), pady=2)
+        custom_ext_frame = ttk.Frame(c_scrollable_frame)
+        custom_ext_frame.grid(row=7, column=0, sticky=(tk.W, tk.E), pady=2)
         custom_ext_frame.columnconfigure(1, weight=1)
 
         ttk.Checkbutton(custom_ext_frame, text="Remove files with extensions:", 
@@ -1629,6 +1671,30 @@ class ImportFolderCleanup:
             self.sorter_export_folder.set(folder)
             self.sorter_log_message(f"Selected export folder: {folder}")
 
+    def _on_output_mode_change(self):
+        """Callback for when output mode radio buttons change"""
+        self._update_export_mode_state()
+
+    def _update_export_mode_state(self):
+        """Enable/disable export mode options based on output mode selection"""
+        is_export_mode = self.output_mode_var.get() == "export"
+        
+        # Enable/disable export folder selection
+        if is_export_mode:
+            self.sorter_export_entry.config(state="readonly")
+            self.sorter_export_browse_button.config(state="normal")
+        else:
+            self.sorter_export_entry.config(state="disabled")
+            self.sorter_export_browse_button.config(state="disabled")
+        
+        # Enable/disable export mode radio buttons
+        if is_export_mode:
+            self.copy_radio_button.config(state="normal")
+            self.move_radio_button.config(state="normal")
+        else:
+            self.copy_radio_button.config(state="disabled")
+            self.move_radio_button.config(state="disabled")
+
     def sorter_log_message(self, message):
         timestamp = datetime.now().strftime("%H:%M:%S")
         self.sorter_log_text.insert(tk.END, f"[{timestamp}] {message}\n")
@@ -1899,6 +1965,19 @@ class ImportFolderCleanup:
         self.cleanup_log_text.see(tk.END)
         self.root.update_idletasks()
 
+    def _on_flatten_folders_toggle(self):
+        """Callback when flatten folders checkbox is toggled"""
+        self._update_remove_empty_folders_state()
+
+    def _update_remove_empty_folders_state(self):
+        """Enable/disable the remove empty folders checkbox based on flatten folders state"""
+        if self.flatten_folders_var.get():
+            self.remove_empty_folders_checkbox.config(state="normal")
+        else:
+            self.remove_empty_folders_checkbox.config(state="disabled")
+            # Uncheck the remove empty folders option when flatten folders is disabled
+            self.remove_empty_folders_var.set(False)
+
     def cleanup_preview_changes(self):
         """Preview all cleanup changes without applying them"""
         if not self.cleanup_selected_folder.get():
@@ -1969,8 +2048,11 @@ class ImportFolderCleanup:
             self.flatten_folders_var.get(),
             self.remove_broken_media_var.get(),
             self.remove_no_thumbnail_videos_var.get(),
+            self.remove_empty_corrupted_mp4_var.get(),
+            self.remove_empty_corrupted_images_var.get(),
             self.remove_temp_files_var.get(),
-            self.remove_custom_extensions_var.get()
+            self.remove_custom_extensions_var.get(),
+            self.remove_empty_folders_var.get()
         ]):
             messagebox.showwarning("Warning", "Please select at least one cleanup option")
             return
@@ -1994,6 +2076,8 @@ class ImportFolderCleanup:
             "Remove Empty Folders": [],
             "Remove Broken Media": [],
             "Remove No-Thumbnail Videos": [],
+            "Remove Empty/Corrupted MP4/MP3": [],
+            "Remove Empty/Corrupted Images": [],
             "Remove Temp Files": [],
             "Remove Custom Extensions": []
         }
@@ -2034,6 +2118,16 @@ class ImportFolderCleanup:
                 if self.remove_no_thumbnail_videos_var.get():
                     no_thumbnail_videos = self._find_no_thumbnail_videos(folder)
                     preview_items["Remove No-Thumbnail Videos"].extend([(f, "Cannot generate thumbnail") for f in no_thumbnail_videos])
+
+                # Analyze empty/corrupted .mp4/.mp3 files
+                if self.remove_empty_corrupted_mp4_var.get():
+                    empty_corrupted_mp4_mp3 = self._find_empty_corrupted_mp4_mp3_files(folder)
+                    preview_items["Remove Empty/Corrupted MP4/MP3"].extend([(f, "Empty or corrupted .mp4/.mp3 file") for f in empty_corrupted_mp4_mp3])
+
+                # Analyze empty/corrupted image/gif files
+                if self.remove_empty_corrupted_images_var.get():
+                    empty_corrupted_images = self._find_empty_corrupted_images(folder)
+                    preview_items["Remove Empty/Corrupted Images"].extend([(f, "Empty or corrupted image/gif file") for f in empty_corrupted_images])
 
                 # Analyze temp files
                 if self.remove_temp_files_var.get():
@@ -2098,15 +2192,23 @@ class ImportFolderCleanup:
                 if self.remove_no_thumbnail_videos_var.get():
                     self._remove_no_thumbnail_videos(folder)
                 
-                # Step 4: Remove temp files
+                # Step 4: Remove empty/corrupted .mp4/.mp3 files
+                if self.remove_empty_corrupted_mp4_var.get():
+                    self._remove_empty_corrupted_mp4_mp3_files(folder)
+                
+                # Step 5: Remove empty/corrupted image/gif files
+                if self.remove_empty_corrupted_images_var.get():
+                    self._remove_empty_corrupted_images(folder)
+                
+                # Step 6: Remove temp files
                 if self.remove_temp_files_var.get():
                     self._remove_temp_files(folder)
                 
-                # Step 5: Remove custom extension files
+                # Step 7: Remove custom extension files
                 if self.remove_custom_extensions_var.get():
                     self._remove_custom_extension_files(folder)
                 
-                # Step 6: Remove empty folders (after all other operations)
+                # Step 8: Remove empty folders (after all other operations)
                 if self.remove_empty_folders_var.get():
                     self._remove_empty_folders(folder)
 
@@ -2185,6 +2287,62 @@ class ImportFolderCleanup:
             self.cleanup_log_message(f"Error finding no-thumbnail videos in '{folder}': {e}")
         
         return no_thumbnail_videos
+
+    def _find_empty_corrupted_mp4_mp3_files(self, folder):
+        """Find empty or corrupted .mp4/.mp3 files"""
+        empty_corrupted_files = []
+        
+        try:
+            # Check .mp4 files
+            for item in folder.rglob('*.mp4'):
+                if item.is_file():
+                    # Check if file is 0 bytes
+                    if item.stat().st_size == 0:
+                        empty_corrupted_files.append(item)
+                        continue
+                    
+                    # Check if file is corrupted using ffprobe
+                    if self._is_broken_video(item):
+                        empty_corrupted_files.append(item)
+            
+            # Check .mp3 files
+            for item in folder.rglob('*.mp3'):
+                if item.is_file():
+                    # Check if file is 0 bytes
+                    if item.stat().st_size == 0:
+                        empty_corrupted_files.append(item)
+                        continue
+                    
+                    # For .mp3 files, we can also check if they're corrupted using ffprobe
+                    if self._is_broken_audio(item):
+                        empty_corrupted_files.append(item)
+                            
+        except Exception as e:
+            self.cleanup_log_message(f"Error finding empty/corrupted .mp4/.mp3 files in '{folder}': {e}")
+        
+        return empty_corrupted_files
+
+    def _find_empty_corrupted_images(self, folder):
+        """Find empty or corrupted image/gif files"""
+        empty_corrupted_images = []
+        image_extensions = {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff', '.tif', '.webp', '.svg', '.ico'}
+        
+        try:
+            for item in folder.rglob('*'):
+                if item.is_file() and item.suffix.lower() in image_extensions:
+                    # Check if file is 0 bytes
+                    if item.stat().st_size == 0:
+                        empty_corrupted_images.append(item)
+                        continue
+                    
+                    # Check if image is corrupted
+                    if self._is_broken_image(item):
+                        empty_corrupted_images.append(item)
+                            
+        except Exception as e:
+            self.cleanup_log_message(f"Error finding empty/corrupted images in '{folder}': {e}")
+        
+        return empty_corrupted_images
 
     def _can_generate_thumbnail(self, video_path):
         """Check if video file can generate a thumbnail using ffmpeg"""
@@ -2278,11 +2436,37 @@ class ImportFolderCleanup:
         except Exception:
             return True  # Image is corrupted or unreadable
 
+    def _is_broken_audio(self, audio_path):
+        """Check if audio file is broken using ffprobe"""
+        try:
+            cmd = [
+                get_ffmpeg_path().replace('ffmpeg', 'ffprobe').replace('ffmpeg.exe', 'ffprobe.exe'),
+                '-v', 'quiet',
+                '-show_entries', 'format=duration',
+                '-of', 'csv=p=0',
+                str(audio_path)
+            ]
+            
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+            
+            if result.returncode != 0:
+                return True  # ffprobe failed, likely corrupted
+            
+            # Check if duration is 0 or invalid
+            try:
+                duration = float(result.stdout.strip())
+                return duration <= 0
+            except (ValueError, TypeError):
+                return True  # Invalid duration, likely corrupted
+                
+        except Exception:
+            return True  # Error occurred, assume corrupted
+
     def _find_temp_files(self, folder):
         """Find temporary and cache files"""
         temp_files = []
-        temp_extensions = {'.tmp', '.temp', '.part', '.download', '.crdownload', '.partial'}
-        temp_names = {'thumbs.db', '.ds_store', 'desktop.ini', '.localized', '.fseventsd', '.spotlight-v100', '.trashes'}
+        temp_extensions = {'.tmp', '.temp', '.part', '.download', '.crdownload', '.partial', '.old'}
+        temp_names = {'thumbs.db', '.ds_store', '.ds_store', 'desktop.ini', '.localized', '.fseventsd', '.spotlight-v100', '.trashes'}
         
         try:
             for item in folder.rglob('*'):
@@ -2290,8 +2474,8 @@ class ImportFolderCleanup:
                     # Check by extension
                     if item.suffix.lower() in temp_extensions:
                         temp_files.append(item)
-                    # Check by filename
-                    elif item.name.lower() in temp_names:
+                    # Check by filename (case-insensitive) - including both .ds_store and .DS_Store
+                    elif item.name.lower() in temp_names or item.name == '.DS_Store':
                         temp_files.append(item)
                     # Check for browser temp files
                     elif item.name.startswith('.') and any(x in item.name.lower() for x in ['cache', 'temp', 'tmp']):
@@ -2385,18 +2569,24 @@ class ImportFolderCleanup:
                 
                 self.cleanup_log_message(f"Moved {moved_count} files from '{flat_folder.name}'")
                 
-                # Remove the now-empty folder after moving all files
-                try:
-                    if moved_count > 0:  # Only remove if we successfully moved files
-                        # Double-check the folder is actually empty
+                # Remove the now-empty folder after moving all files (only if option is enabled)
+                if self.remove_empty_folders_var.get():
+                    try:
+                        if moved_count > 0:  # Only remove if we successfully moved files
+                            # Double-check the folder is actually empty
+                            remaining_items = list(flat_folder.iterdir())
+                            if not remaining_items:
+                                flat_folder.rmdir()
+                                self.cleanup_log_message(f"Removed empty folder: {flat_folder.name}")
+                            else:
+                                self.cleanup_log_message(f"Folder '{flat_folder.name}' not removed - still contains {len(remaining_items)} items")
+                    except Exception as e:
+                        self.cleanup_log_message(f"Error removing empty folder '{flat_folder.name}': {e}")
+                else:
+                    if moved_count > 0:
                         remaining_items = list(flat_folder.iterdir())
                         if not remaining_items:
-                            flat_folder.rmdir()
-                            self.cleanup_log_message(f"Removed empty folder: {flat_folder.name}")
-                        else:
-                            self.cleanup_log_message(f"Folder '{flat_folder.name}' not removed - still contains {len(remaining_items)} items")
-                except Exception as e:
-                    self.cleanup_log_message(f"Error removing empty folder '{flat_folder.name}': {e}")
+                            self.cleanup_log_message(f"Folder '{flat_folder.name}' is now empty (not removed - option disabled)")
                 
         except Exception as e:
             self.cleanup_log_message(f"Error flattening folders in '{parent_folder}': {e}")
@@ -2460,16 +2650,21 @@ class ImportFolderCleanup:
             
             self.cleanup_log_message(f"Moved {moved_count} items from '{selected_folder.name}'")
             
-            # Remove the now-empty selected folder if all items were moved successfully
-            try:
+            # Remove the now-empty selected folder if all items were moved successfully (only if option is enabled)
+            if self.remove_empty_folders_var.get():
+                try:
+                    remaining_items = list(selected_folder.iterdir())
+                    if not remaining_items:
+                        selected_folder.rmdir()
+                        self.cleanup_log_message(f"Removed empty folder: {selected_folder.name}")
+                    else:
+                        self.cleanup_log_message(f"Folder '{selected_folder.name}' not removed - still contains {len(remaining_items)} items")
+                except Exception as e:
+                    self.cleanup_log_message(f"Error removing empty folder '{selected_folder.name}': {e}")
+            else:
                 remaining_items = list(selected_folder.iterdir())
                 if not remaining_items:
-                    selected_folder.rmdir()
-                    self.cleanup_log_message(f"Removed empty folder: {selected_folder.name}")
-                else:
-                    self.cleanup_log_message(f"Folder '{selected_folder.name}' not removed - still contains {len(remaining_items)} items")
-            except Exception as e:
-                self.cleanup_log_message(f"Error removing empty folder '{selected_folder.name}': {e}")
+                    self.cleanup_log_message(f"Folder '{selected_folder.name}' is now empty (not removed - option disabled)")
                 
         except Exception as e:
             self.cleanup_log_message(f"Error flattening selected folder '{selected_folder}': {e}")
@@ -2477,7 +2672,10 @@ class ImportFolderCleanup:
     def _remove_broken_media_files(self, folder):
         """Remove broken or empty media files"""
         try:
+            self.cleanup_log_message(f"Scanning for broken media files in: {folder.name}")
             broken_files = self._find_broken_media_files(folder)
+            self.cleanup_log_message(f"Found {len(broken_files)} broken media files")
+            
             removed_count = 0
             
             for file_path in broken_files:
@@ -2490,6 +2688,8 @@ class ImportFolderCleanup:
             
             if removed_count > 0:
                 self.cleanup_log_message(f"Removed {removed_count} broken media files")
+            else:
+                self.cleanup_log_message("No broken media files found to remove")
                 
         except Exception as e:
             self.cleanup_log_message(f"Error removing broken media files in '{folder}': {e}")
@@ -2497,7 +2697,10 @@ class ImportFolderCleanup:
     def _remove_no_thumbnail_videos(self, folder):
         """Remove .mp4 files that can't generate thumbnails (audio-only files)"""
         try:
+            self.cleanup_log_message(f"Scanning for .mp4 files without thumbnails in: {folder.name}")
             no_thumbnail_videos = self._find_no_thumbnail_videos(folder)
+            self.cleanup_log_message(f"Found {len(no_thumbnail_videos)} .mp4 files without thumbnails")
+            
             removed_count = 0
             
             for file_path in no_thumbnail_videos:
@@ -2510,26 +2713,98 @@ class ImportFolderCleanup:
             
             if removed_count > 0:
                 self.cleanup_log_message(f"Removed {removed_count} .mp4 files without thumbnails")
+            else:
+                self.cleanup_log_message("No .mp4 files without thumbnails found to remove")
                 
         except Exception as e:
             self.cleanup_log_message(f"Error removing .mp4 files without thumbnails in '{folder}': {e}")
 
+    def _remove_empty_corrupted_mp4_mp3_files(self, folder):
+        """Remove empty or corrupted .mp4/.mp3 files"""
+        try:
+            self.cleanup_log_message(f"Scanning for empty/corrupted .mp4/.mp3 files in: {folder.name}")
+            empty_corrupted_files = self._find_empty_corrupted_mp4_mp3_files(folder)
+            self.cleanup_log_message(f"Found {len(empty_corrupted_files)} empty/corrupted .mp4/.mp3 files")
+            
+            removed_count = 0
+            
+            for file_path in empty_corrupted_files:
+                try:
+                    file_path.unlink()
+                    self.cleanup_log_message(f"Removed empty/corrupted .mp4/.mp3 file: {file_path.name}")
+                    removed_count += 1
+                except Exception as e:
+                    self.cleanup_log_message(f"Error removing .mp4/.mp3 file '{file_path.name}': {e}")
+            
+            if removed_count > 0:
+                self.cleanup_log_message(f"Removed {removed_count} empty/corrupted .mp4/.mp3 files")
+            else:
+                self.cleanup_log_message("No empty/corrupted .mp4/.mp3 files found to remove")
+                
+        except Exception as e:
+            self.cleanup_log_message(f"Error removing empty/corrupted .mp4/.mp3 files in '{folder}': {e}")
+
+    def _remove_empty_corrupted_images(self, folder):
+        """Remove empty or corrupted image/gif files"""
+        try:
+            self.cleanup_log_message(f"Scanning for empty/corrupted image/gif files in: {folder.name}")
+            empty_corrupted_images = self._find_empty_corrupted_images(folder)
+            self.cleanup_log_message(f"Found {len(empty_corrupted_images)} empty/corrupted image/gif files")
+            
+            removed_count = 0
+            
+            for file_path in empty_corrupted_images:
+                try:
+                    file_path.unlink()
+                    self.cleanup_log_message(f"Removed empty/corrupted image/gif file: {file_path.name}")
+                    removed_count += 1
+                except Exception as e:
+                    self.cleanup_log_message(f"Error removing image/gif file '{file_path.name}': {e}")
+            
+            if removed_count > 0:
+                self.cleanup_log_message(f"Removed {removed_count} empty/corrupted image/gif files")
+            else:
+                self.cleanup_log_message("No empty/corrupted image/gif files found to remove")
+                
+        except Exception as e:
+            self.cleanup_log_message(f"Error removing empty/corrupted image/gif files in '{folder}': {e}")
+
     def _remove_temp_files(self, folder):
         """Remove temporary and cache files"""
         try:
+            self.cleanup_log_message(f"Scanning for temporary files in: {folder.name}")
             temp_files = self._find_temp_files(folder)
+            self.cleanup_log_message(f"Found {len(temp_files)} temporary files")
+            
+            # Debug: list all found temp files
+            for temp_file in temp_files:
+                self.cleanup_log_message(f"  - {temp_file.name}")
+            
             removed_count = 0
             
             for file_path in temp_files:
                 try:
-                    file_path.unlink()
-                    self.cleanup_log_message(f"Removed temp file: {file_path.name}")
+                    # Special handling for .ds_store files - they might be recreated by the system
+                    if file_path.name.lower() in ['.ds_store', '.ds_store']:
+                        self.cleanup_log_message(f"Attempting to remove .ds_store file: {file_path.name}")
+                        # Try to remove with force
+                        file_path.unlink()
+                        self.cleanup_log_message(f"Successfully removed .ds_store file: {file_path.name}")
+                    else:
+                        file_path.unlink()
+                        self.cleanup_log_message(f"Removed temp file: {file_path.name}")
                     removed_count += 1
+                except PermissionError as e:
+                    self.cleanup_log_message(f"Permission denied removing temp file '{file_path.name}': {e}")
+                except FileNotFoundError:
+                    self.cleanup_log_message(f"Temp file '{file_path.name}' already removed")
                 except Exception as e:
                     self.cleanup_log_message(f"Error removing temp file '{file_path.name}': {e}")
             
             if removed_count > 0:
                 self.cleanup_log_message(f"Removed {removed_count} temporary files")
+            else:
+                self.cleanup_log_message("No temporary files found to remove")
                 
         except Exception as e:
             self.cleanup_log_message(f"Error removing temp files in '{folder}': {e}")
@@ -2537,7 +2812,10 @@ class ImportFolderCleanup:
     def _remove_custom_extension_files(self, folder):
         """Remove files with custom extensions"""
         try:
+            self.cleanup_log_message(f"Scanning for custom extension files in: {folder.name}")
             custom_files = self._find_custom_extension_files(folder)
+            self.cleanup_log_message(f"Found {len(custom_files)} custom extension files")
+            
             removed_count = 0
             
             for file_path in custom_files:
@@ -2550,6 +2828,8 @@ class ImportFolderCleanup:
             
             if removed_count > 0:
                 self.cleanup_log_message(f"Removed {removed_count} custom extension files")
+            else:
+                self.cleanup_log_message("No custom extension files found to remove")
                 
         except Exception as e:
             self.cleanup_log_message(f"Error removing custom extension files in '{folder}': {e}")
