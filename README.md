@@ -1,4 +1,4 @@
-Media Import Folder Organizer
+Bulk Media Organizer
 ========================================
 
 A desktop application for organizing large volumes of imported media files such as videos, images, and audio.
