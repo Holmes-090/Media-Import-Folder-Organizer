@@ -1,7 +1,0 @@
-tkinter
-pathlib
-subprocess
-re
-json
-threading
-queue 
